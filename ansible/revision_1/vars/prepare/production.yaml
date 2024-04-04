@@ -1,0 +1,8 @@
+innodb_buffer_pool_size: "{{ (ansible_memtotal_mb *0.8)|int|abs }}MB"
+
+xtrabackup_parallel: "4"
+xtrabackup_compress_threads: "4"
+
+mysqldump_backup_file_path: ""
+
+old_master_private_ip: "1.2.3.4"

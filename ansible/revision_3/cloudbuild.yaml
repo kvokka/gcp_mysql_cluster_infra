@@ -1,0 +1,45 @@
+# In this directory, run the following command to build this builder.
+# $ gcloud builds submit .
+
+steps:
+
+  - name: "gcr.io/$PROJECT_ID/ansible"
+    id: run
+    env:
+    - 'ANSIBLE_HOST_KEY_CHECKING=False'
+    - 'GCP_ENVIRONMENT=${_GCP_ENVIRONMENT}'
+    secretEnv:
+    - 'GCP_SERVICE_ACCOUNT_FILE_CONTENT'
+    - 'GCP_PK_FILE_CONTENT'
+    - 'GCP_PUB_KEY'
+    - 'MYSQL_PASS_STAGING'
+    - 'MYSQL_PASS_PRODUCTION'
+    - 'GCS_ACCESS_KEY'
+    - 'GCS_SECRET_KEY'
+    args:
+    - ansible-playbook
+    - ${_PLAYBOOK}.yaml
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/ansible-sa/versions/latest
+      env: 'GCP_SERVICE_ACCOUNT_FILE_CONTENT'
+    - versionName: projects/$PROJECT_ID/secrets/ansible-private-key/versions/latest
+      env: 'GCP_PK_FILE_CONTENT'
+    - versionName: projects/$PROJECT_ID/secrets/ansible-public-key/versions/latest
+      env: 'GCP_PUB_KEY'
+    - versionName: projects/$PROJECT_ID/secrets/service-mysql-password-staging/versions/latest
+      env: 'MYSQL_PASS_STAGING'
+    - versionName: projects/$PROJECT_ID/secrets/service-mysql-password-production/versions/latest
+      env: 'MYSQL_PASS_PRODUCTION'
+    - versionName: projects/$PROJECT_ID/secrets/mysql-backup-gcs-access_key/versions/latest
+      env: 'GCS_ACCESS_KEY'
+    - versionName: projects/$PROJECT_ID/secrets/mysql-backup-gcs-secret_key/versions/latest
+      env: 'GCS_SECRET_KEY'
+
+substitutions:
+  _PLAYBOOK: initialize
+  _GCP_ENVIRONMENT: staging
+
+timeout: 1200s
+tags: ['ansible-mysql', 'ansible']

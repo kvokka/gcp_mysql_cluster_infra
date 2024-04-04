@@ -1,0 +1,38 @@
+- name: Fetch the UUID of data disk
+  command: blkid -s UUID -o value /dev/disk/by-id/google-db-migration || blkid -s UUID -o value /dev/disk/by-id/google-db-migration2
+  changed_when: false
+  register: db_migration_disk_blkid_out
+  when: gcp_environment == 'production'
+
+- name: Delete lost+found in the directory
+  ansible.builtin.file:
+    state: absent
+    path: "/mnt/disks/db-migration/lost+found"
+  when: >
+    data_filesystem.changed and
+    gcp_environment == 'production'
+
+- name: Mount data disk by UUID
+  ansible.posix.mount:
+    path: /mnt/disks/db-migration
+    src: UUID={{ db_migration_disk_blkid_out.stdout }}
+    fstype: ext4
+    opts: defaults
+    state: mounted
+  when: gcp_environment == 'production'
+
+- name: Fetch last gtid
+  shell: >
+    cat /mnt/disks/db-migration/xtrabackup_info | \
+    tr -d '\n' | \
+    grep -oh "GTID of the last change '[,:0-9a-z-]*'" | \
+    grep -oh "'[,:0-9a-z-]*'"
+  register: last_gtid
+  when: gcp_environment == 'production'
+
+- name: Add xtrabackup migration backup restore script
+  template:
+    src: xtrabackup_backup_restore_from_migration.bash.j2
+    dest: /usr/local/bin/xtrabackup_backup_restore_from_migration
+    mode: 0700
+  when: gcp_environment == 'production'

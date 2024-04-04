@@ -1,0 +1,56 @@
+# This role is here to set external replication from already existed DB
+#
+# If you are replicating from aiven don't forget to add the master Mysql
+# host in the Allowed IP addresses on the page
+# https://console.aiven.io/project/my-project/services/db-service-staging/overview
+- hosts: localhost
+  gather_facts: no
+  tasks:
+  - debug: var=groups
+
+- hosts: _role_master
+  gather_facts: yes
+  remote_user: ansible
+  become: true
+  vars_files:
+    - "vars/common.yaml"
+    - "vars/external_replication/common.yaml"
+    - "vars/external_replication/{{ lookup('env','GCP_ENVIRONMENT') or 'staging' }}.yaml"
+  tasks:
+  - name: Set master private_ip from the dynamic inventory
+    set_fact:
+      master_private_ip: "{{ hostvars[inventory_hostname]['networkInterfaces'][0]['networkIP'] }}"
+
+  - name: Register master replication status
+    mysql_replication:
+      login_user: root
+      login_password: "{{ mysql_root_password }}"
+      mode: getreplica
+    ignore_errors: true
+    register: master
+
+  - name: Stop replication on master
+    mysql_replication:
+      login_user: root
+      login_password: "{{ mysql_root_password }}"
+      mode: stopreplica
+    when: (('Replica_SQL_Running' in master) and master['Replica_SQL_Running'] == 'Yes') or (('Slave_SQL_Running' in master) and master['Slave_SQL_Running'] == 'Yes')
+
+  - name: Configure replication on the master
+    mysql_replication:
+      login_user: root
+      login_password: "{{ mysql_root_password }}"
+      mode: changeprimary
+      primary_host: "{{ external_replication_host_up }}"
+      primary_user: "{{ external_replication_username }}"
+      primary_password: "{{ external_replication_password }}"
+      primary_port: "{{ external_replication_port }}"
+      primary_auto_position: "true"
+
+  - name: Start replication on master
+    mysql_replication:
+      login_user: root
+      login_password: "{{ mysql_root_password }}"
+      mode: startreplica
+
+  - debug: var=master

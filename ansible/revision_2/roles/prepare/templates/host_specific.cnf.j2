@@ -1,0 +1,13 @@
+[mysql]
+prompt                         = {{ ansible_hostname | replace("mysql-", "") }}>\_
+
+[mysqld]
+
+bind-address                   = {{ private_ip }}
+innodb-buffer-pool-size        = {{ innodb_buffer_pool_size }}
+server-id                      = {{ server_id }}
+datadir                        = {{ mysql_databases_datadir_path }}
+
+log-error                      = {{ mysql_error_logs_path }}
+slow-query-log-file            = {{ mysql_slow_logs_path }}
+expire-logs-days               = {{ mysql_expire_logs_days }}

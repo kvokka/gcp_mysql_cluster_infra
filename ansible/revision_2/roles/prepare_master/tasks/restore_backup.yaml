@@ -1,0 +1,10 @@
+- name: Restore MySQL backup with mysqldump from zipped sql file on creation
+  async: 86400
+  poll: 0 # Further reading https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_async.html#run-tasks-concurrently-poll-0
+  command: mysqldump_backup_restore
+  environment:
+    MYSQL_PWD: "{{ mysql_root_password }}"
+  when: >
+    (mysqldump_backup_file_path|default('')|length > 0) and
+    (xtrabackup_backup_folder|default('')|length == 0) and
+    data_filesystem.changed

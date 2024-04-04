@@ -1,0 +1,5 @@
+gcp_sa_file: "./ansible-sa.json" # Which is used by Ansible and stored on provision machine
+gcp_zone: "us-central1-c"
+gcp_region: "us-central1"
+gcp_project: my-awesome-project
+gcp_auth_kind: serviceaccount

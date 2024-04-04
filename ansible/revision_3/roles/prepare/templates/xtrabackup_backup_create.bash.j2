@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+
+set -e
+set -o pipefail
+
+BACKUP_FILE="{{ gcp_environment }}-{{ database_name }}-$(date '+%Y-%m-%d--%H-%M-%S')"
+LOCK=/tmp/mysql_backup-$BACKUP_FILE.lock
+TMP_DIR=/tmp/mysql_backup-$BACKUP_FILE
+BUCKET={{ backup_bucket }}
+NICE=nice
+IONICE=ionice
+
+PARALLEL_UPLOAD_THREADS={{ xtrabackup_upload_threads }}
+
+start=`date +%s`
+
+exec > >(tee "{{ mysql_backup_logs }}/xtrabackup_backup_create_$(date '+%Y-%m-%d--%H-%M-%S').log") 2>&1
+
+format_time(){
+  date -u -d @"$1" +"%-Hh %-Mm %-Ss"
+}
+
+slack_message() {
+  end=`date +%s`
+  runtime=$(($end-$start))
+  local msg="$1"
+  local slack_icon=':backup_and_restore:'
+  local slack_channel='#tech-notifications'
+  local slack_username='MySQL-cluster-backup'
+  local title="MySQL Backup create"
+  local suffix
+  if [[ "$runtime" -gt 3 ]];then suffix=",\"fields\": [{\"title\":\"Duration\",\"value\":\"$(format_time $runtime)\"}]";fi
+  local payload="payload={\"channel\": \"$slack_channel\", \"username\": \"$slack_username\", \"text\": \"\", \"icon_emoji\": \"$slack_icon\", \"attachments\":[{\"title\":\"$title\",\"text\":\"$msg\",\"color\":\"$2\"$suffix}]}"
+  local url="https://hooks.slack.com/services/my/awesome/key"
+  ans=`curl -X POST --data-urlencode "$payload" $url 2>/dev/null`
+}
+
+msg_prefix="*[{{ gcp_environment }}]* *[{{ hostvars[inventory_hostname]['ansible_hostname'] }}]*"
+
+failed_message() {
+  slack_message "$msg_prefix service Mysql DB backup failed" "danger"
+}
+
+trap failed_message ERR
+
+slave_running=$(mysql -e "SHOW GLOBAL STATUS LIKE 'slave_running';" | { grep running || test $? = 1; } | awk '{print $2}')
+if [[ "$slave_running" == "OFF" ]]; then
+  slack_message "Slave is not running! Aborting backup." "danger"
+  exit 1
+fi
+
+if [[ -e $LOCK ]]; then
+  echo "Lock found. Exiting"
+  slack_message "Lock found. Exiting." "danger"
+  exit 1
+fi
+
+touch $LOCK
+
+{% if mysql_version == '8.0' %}
+dpkg -s percona-xtrabackup-24 && DEBIAN_FRONTEND='noninteractive' apt install -y percona-xtrabackup-80 || true
+{% endif %}
+
+slack_message "$msg_prefix service Mysql xtrabackup DB backup \
+  creation process started to $FOLDER" "warning"
+
+$NICE -n 5 $IONICE -c2 -n7 xtrabackup \
+  --user=root \
+  --password=$MYSQL_PWD \
+  --backup \
+  --stream=xbstream \
+  --extra-lsndir=$TMP_DIR \
+  --target-dir=$TMP_DIR \
+  --compress | \
+$NICE -n 15 $IONICE -c1 -n6 xbcloud put --storage=google \
+  --google-endpoint='storage.googleapis.com' \
+  --google-access-key='{{ gcs_access_key }}' \
+  --google-secret-key='{{ gcs_secret_key }}' \
+  --google-bucket="$BUCKET" \
+  --parallel=$PARALLEL_UPLOAD_THREADS \
+  $BACKUP_FILE
+
+slack_message "$msg_prefix service Mysql DB backup creation finished successfully" "good"
+
+rm -fr $TMP_DIR
+rm $LOCK

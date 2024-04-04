@@ -1,0 +1,12 @@
+[Unit]
+Description=Node Exporter
+StartLimitIntervalSec=0
+
+[Service]
+User=nodeexporter
+ExecStart=/usr/local/sbin/node_exporter
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

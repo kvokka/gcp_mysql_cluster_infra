@@ -1,0 +1,6 @@
+backup_bucket: mysql-backup
+
+mysql_databases_path: "/var/lib/mysql"
+mysql_databases_datadir_path: "{{ mysql_databases_path }}/data"
+
+mysql_backup_logs: "/var/log/mysql"

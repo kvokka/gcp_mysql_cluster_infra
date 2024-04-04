@@ -1,0 +1,36 @@
+[mysql]
+
+port                           = 3306
+socket                         = /var/run/mysqld/mysqld.sock
+
+[mysqld]
+# GENERAL #
+port                           = 3306
+user                           = mysql
+default-storage-engine         = InnoDB
+pid-file                       = /var/run/mysqld/mysqld.pid
+socket                         = /var/run/mysqld/mysqld.sock
+lc-messages-dir                = /usr/share/mysql
+transaction-isolation          = READ-COMMITTED
+
+# LOGGING #
+log-queries-not-using-indexes  = 0
+slow-query-log                 = 1
+
+# REPLICATION - BINARY LOGGING #
+binlog_cache_size              = 1M
+log_bin                        = mysql-bin
+log_slave_updates              = 1
+binlog_format                  = row
+binlog_row_image               = minimal
+#support GTID
+enforce_gtid_consistency=1
+gtid_mode=on
+relay-log = relay-bin
+relay-log-index = relay-bin.index
+
+[mysqld_safe]
+numa_interleave
+flush_caches
+malloc-lib                     = /usr/lib/x86_64-linux-gnu/libjemalloc.so
+

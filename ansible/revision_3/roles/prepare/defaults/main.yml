@@ -1,0 +1,15 @@
+public_ip: "{{ ansible_host }}"
+
+mysql_logs_path: "/var/log/mysql"
+mysql_error_logs_path: "{{ mysql_logs_path }}/mysql-error.log"
+mysql_slow_logs_path: "{{ mysql_logs_path }}/mysql-slow.log"
+
+xtrabackup_backup_folder: ''
+mysqldump_backup_file_path: ''
+
+mysql_expire_logs_days: "3"
+
+xtrabackup_parallel: "1"
+xtrabackup_compress_threads: "1"
+
+xtrabackup_upload_threads: "1"

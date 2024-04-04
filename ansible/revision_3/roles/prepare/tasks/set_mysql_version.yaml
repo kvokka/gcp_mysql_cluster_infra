@@ -1,0 +1,20 @@
+- name: ensure .env file exists
+  copy:
+    content: ""
+    dest: /root/.env
+    force: false
+
+# Using the hack with `export` because `source` does not work for some reason
+- name: Fetch installed MySQL full version
+  shell:
+    executable: /bin/bash
+    cmd: "export $(cat /root/.env) > /dev/null && mysql -N -B -e 'select @@version;'"
+  register: full_mysql_version
+
+- name: Fetch installed MySQL short version
+  set_fact:
+    mysql_version: "{{ full_mysql_version.stdout[:3] }}"
+
+- name: Print fetched MySQL version
+  ansible.builtin.debug:
+    msg: Full MySQL version is {{ full_mysql_version.stdout }}, short is {{ mysql_version }}

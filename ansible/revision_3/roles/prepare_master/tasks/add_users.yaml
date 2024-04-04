@@ -1,0 +1,41 @@
+# mysql_user plugin does not update the existed users, so we only hassle about creation
+# on the first run
+
+- name: Create replication user
+  community.mysql.mysql_user:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    update_password: always
+    name: "{{ mysql_replication_username }}"
+    password: "{{ mysql_replication_password }}"
+    host: "{{ mysql_replication_host }}"
+    priv: "{{ mysql_replication_priv }}"
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock
+  when: data_filesystem.changed
+
+- name: Create service user
+  community.mysql.mysql_user:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    update_password: always
+    name: "{{ mysql_service_username }}"
+    password: "{{ mysql_service_password }}"
+    host: "{{ mysql_service_host }}"
+    priv: "{{ mysql_service_priv }}"
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock
+  when: data_filesystem.changed
+
+- name: Create mysql_exporter user
+  community.mysql.mysql_user:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    update_password: always
+    name: "{{ mysql_exporter_username }}"
+    password: "{{ mysql_exporter_password }}"
+    host: "{{ mysql_exporter_host }}"
+    priv: "{{ mysql_exporter_priv }}"
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock
+  when: data_filesystem.changed

@@ -1,0 +1,13 @@
+---
+- import_tasks: set_mysql_version.yaml
+- import_tasks: update_repo.yaml
+- import_tasks: add_ssh_key.yaml
+- import_tasks: logs_disk.yaml
+- import_tasks: set_fact_private_ip.yaml
+- import_tasks: tweak_mysql.yaml
+- import_tasks: data_disk.yaml
+- import_tasks: set_root_password.yaml
+- import_tasks: add_backup_script.yaml
+- import_tasks: migration_disk.yaml
+- import_tasks: mysql_exporter.yaml
+- import_tasks: restore_backup.yaml

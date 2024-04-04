@@ -1,0 +1,17 @@
+- name: Add mysql exporter credentials
+  template:
+    src: mysql_exporter.cnf.j2
+    dest: "/etc/.mysqld_exporter.cnf"
+    group: mysqlexporter
+    owner: mysqlexporter
+
+- name: Apply mysql exporter config
+  template:
+    src: mysql-exporter.service.j2
+    dest: "/etc/systemd/system/mysql-exporter.service"
+
+- name: Ensure MySQL was restarted and enabled on boot
+  service:
+    name: mysql-exporter
+    state: restarted
+    enabled: yes

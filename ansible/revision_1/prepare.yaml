@@ -1,0 +1,67 @@
+---
+
+- hosts: cluster:cluster_hosts
+  gather_facts: yes
+  remote_user: ansible
+  become: true
+  vars_files:
+    - "vars/common.yaml"
+    - "vars/prepare/common.yaml"
+    - "vars/prepare/{{ lookup('env','GCP_ENVIRONMENT') or 'staging' }}.yaml"
+  roles:
+    - role: prepare
+
+  post_tasks:
+  - name: Ensure MySQL is started and enabled on boot
+    service:
+      name: mysql
+      state: started
+      enabled: yes
+
+- hosts: _role_master
+  gather_facts: yes
+  remote_user: ansible
+  become: true
+  vars_files:
+    - "vars/common.yaml"
+    - "vars/prepare/common.yaml"
+    - "vars/prepare/{{ lookup('env','GCP_ENVIRONMENT') or 'staging' }}.yaml"
+  roles:
+    - role: prepare_master
+
+- hosts: _role_slave
+  gather_facts: yes
+  remote_user: ansible
+  become: true
+  vars_files:
+    - "vars/prepare/common.yaml"
+    - "vars/common.yaml"
+  roles:
+    - role: prepare_slave
+
+- hosts: cluster:cluster_hosts
+  gather_facts: yes
+  remote_user: ansible
+  become: true
+  vars_files:
+    - "vars/common.yaml"
+    - "vars/prepare/common.yaml"
+    - "vars/prepare/{{ lookup('env','GCP_ENVIRONMENT') or 'staging' }}.yaml"
+  tasks:
+    - name: Restore MySQL backup with xtrabackup from unarchived backup /mnt/db-migration
+      async: 86400
+      poll: 0 # Further reading https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_async.html#run-tasks-concurrently-poll-0
+      command: xtrabackup_backup_restore_from_migration
+      environment:
+        MYSQL_PWD: "{{ mysql_root_password }}"
+      when: >
+        gcp_environment == 'production' and
+        data_filesystem.changed and
+        (db_migration_disk_blkid_out.stdout|default('')|length > 0)
+
+  post_tasks:
+  - name: Ensure MySQL-exporter is restarted and enabled on boot
+    service:
+      name: mysql-exporter
+      state: restarted
+      enabled: yes

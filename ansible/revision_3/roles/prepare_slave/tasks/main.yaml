@@ -1,0 +1,3 @@
+---
+- import_tasks: set_replication.yaml
+- import_tasks: add_backup_script.yaml

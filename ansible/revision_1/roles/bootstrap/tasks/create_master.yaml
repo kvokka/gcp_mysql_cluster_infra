@@ -1,0 +1,206 @@
+- name: create master boot disk
+  google.cloud.gcp_compute_disk:
+    name: "mysql-{{ gcp_environment }}-master-boot-{{ revision }}"
+    size_gb: "{{ gcp_boot_disk_size_in_gb }}"
+    source_image: "{{ gcp_data_disk_source_image }}"
+    zone: "{{ gcp_zone }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    state: present
+    labels:
+      component: mysql
+      role: "{{ mysql_boot_disk_device_name }}"
+      environment: "{{ gcp_environment }}"
+      revision: "{{ revision }}"
+  register: "mysql_disk_master_boot"
+
+- name: create master data disk
+  google.cloud.gcp_compute_disk:
+    name: "mysql-{{ gcp_environment }}-master-data-{{ revision }}"
+    size_gb: "{{ gcp_data_disk_size_in_gb }}"
+    zone: "{{ gcp_zone }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    state: present
+    type: pd-ssd
+    labels:
+      component: mysql
+      role: "{{ mysql_data_disk_device_name }}"
+      environment: "{{ gcp_environment }}"
+      revision: "{{ revision }}"
+  register: "mysql_disk_master_data"
+
+- name: create master logs disk
+  google.cloud.gcp_compute_disk:
+    name: "mysql-{{ gcp_environment }}-master-logs-{{ revision }}"
+    size_gb: "{{ gcp_logs_disk_size_in_gb }}"
+    zone: "{{ gcp_zone }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    state: present
+    type: pd-standard
+    labels:
+      component: mysql
+      role: "{{ mysql_logs_disk_device_name }}"
+      environment: "{{ gcp_environment }}"
+      revision: "{{ revision }}"
+  register: "mysql_disk_master_logs"
+
+- name: pickup db migration disk
+  google.cloud.gcp_compute_disk:
+    name: "db-migration"
+    size_gb: "450"
+    zone: "{{ gcp_zone }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    state: present
+    type: pd-standard
+    labels:
+      environment: "{{ gcp_environment }}"
+      component: mysql
+      role: "db-migration"
+      revision: "{{ revision }}"
+      eol: "01-06-2024"
+      type: "temporary"
+  register: "mysql_migration_disk"
+  when: >
+    gcp_environment == 'production'
+
+- name: create network
+  google.cloud.gcp_compute_network:
+    name: "default"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    # auto_create_subnetworks: yes
+    state: present
+  register: network
+
+- name: create master address
+  google.cloud.gcp_compute_address:
+    name: "mysql-{{ gcp_environment }}-master-{{ revision }}"
+    region: "{{ gcp_region }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    state: present
+  register: "mysql_address_master"
+
+- name: create master instance
+  google.cloud.gcp_compute_instance:
+    name: "mysql-{{ gcp_environment }}-master-{{ revision }}"
+    machine_type: "{{ gcp_machine_type }}"
+    disks:
+    - auto_delete: 'true'
+      boot: 'true'
+      source: "{{ mysql_disk_master_boot }}"
+      device_name: "{{ mysql_boot_disk_device_name }}"
+    - auto_delete: 'true'
+      source: "{{ mysql_disk_master_data }}"
+      device_name: "{{ mysql_data_disk_device_name }}"
+    - auto_delete: 'true'
+      source: "{{ mysql_disk_master_logs }}"
+      device_name: "{{ mysql_logs_disk_device_name }}"
+    - auto_delete: 'false'
+      source: "{{ mysql_migration_disk }}"
+      device_name: "db-migration"
+    labels:
+      environment: "{{ gcp_environment }}"
+      component: mysql
+      revision: "{{ revision }}"
+      role: master
+    network_interfaces:
+    - network: "{{ network }}"
+      access_configs:
+      - name: External NAT
+        nat_ip: "{{ mysql_address_master }}"
+        type: ONE_TO_ONE_NAT
+    service_accounts:
+      - email: "{{ gcp_vm_sa_email }}"
+        # https://cloud.google.com/sdk/gcloud/reference/alpha/compute/instances/set-scopes
+        # for some reason it does not accept aliases
+        scopes:
+        # default
+        - https://www.googleapis.com/auth/devstorage.read_only
+        - https://www.googleapis.com/auth/logging.write
+        - https://www.googleapis.com/auth/monitoring.write
+        - https://www.googleapis.com/auth/pubsub
+        - https://www.googleapis.com/auth/service.management.readonly
+        - https://www.googleapis.com/auth/servicecontrol
+        - https://www.googleapis.com/auth/trace.append
+        # storage-rw
+        - https://www.googleapis.com/auth/devstorage.read_write
+    metadata:
+      ssh-keys: "ansible:{{ lookup('file',  '~/.ssh/ansible.pub') }}"
+    zone: "{{ gcp_zone }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    state: present
+  register: "mysql_instance_master"
+  when: >
+    gcp_environment == 'production'
+
+- name: create master instance
+  google.cloud.gcp_compute_instance:
+    name: "mysql-{{ gcp_environment }}-master-{{ revision }}"
+    machine_type: "{{ gcp_machine_type }}"
+    disks:
+    - auto_delete: 'true'
+      boot: 'true'
+      source: "{{ mysql_disk_master_boot }}"
+      device_name: "{{ mysql_boot_disk_device_name }}"
+    - auto_delete: 'true'
+      source: "{{ mysql_disk_master_data }}"
+      device_name: "{{ mysql_data_disk_device_name }}"
+    - auto_delete: 'true'
+      source: "{{ mysql_disk_master_logs }}"
+      device_name: "{{ mysql_logs_disk_device_name }}"
+    labels:
+      environment: "{{ gcp_environment }}"
+      component: mysql
+      revision: "{{ revision }}"
+      role: master
+    network_interfaces:
+    - network: "{{ network }}"
+      access_configs:
+      - name: External NAT
+        nat_ip: "{{ mysql_address_master }}"
+        type: ONE_TO_ONE_NAT
+    service_accounts:
+      - email: "{{ gcp_vm_sa_email }}"
+        # https://cloud.google.com/sdk/gcloud/reference/alpha/compute/instances/set-scopes
+        # for some reason it does not accept aliases
+        scopes:
+        # default
+        - https://www.googleapis.com/auth/devstorage.read_only
+        - https://www.googleapis.com/auth/logging.write
+        - https://www.googleapis.com/auth/monitoring.write
+        - https://www.googleapis.com/auth/pubsub
+        - https://www.googleapis.com/auth/service.management.readonly
+        - https://www.googleapis.com/auth/servicecontrol
+        - https://www.googleapis.com/auth/trace.append
+        # storage-rw
+        - https://www.googleapis.com/auth/devstorage.read_write
+    metadata:
+      ssh-keys: "ansible:{{ lookup('file',  '~/.ssh/ansible.pub') }}"
+    zone: "{{ gcp_zone }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    state: present
+  register: "mysql_instance_master"
+  when: >
+    gcp_environment == 'staging'
+
+- name: Wait for server to start
+  wait_for_connection:
+    delay: 100
+
+# On the first dynamic hosts do not catch up, so we use this instead
+- name: Save hosts data
+  add_host: hostname={{ mysql_address_master.address }} groupname=cluster_hosts,_role_master ansible_ssh_private_key_file=~/.ssh/ansible

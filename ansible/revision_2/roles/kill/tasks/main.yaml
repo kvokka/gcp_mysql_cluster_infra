@@ -1,0 +1,41 @@
+- name: remove instances
+  google.cloud.gcp_compute_instance:
+    name: "{{ item }}"
+    zone: "{{ gcp_zone }}"
+    project:  "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    state: absent
+  loop:
+    - "mysql-{{ gcp_environment }}-master-{{ revision }}"
+    - "mysql-{{ gcp_environment }}-slave-{{ revision }}"
+
+- name: remove disks
+  google.cloud.gcp_compute_disk:
+    name: "{{ item }}"
+    zone: "{{ gcp_zone }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    state: absent
+  ignore_errors: true
+  loop:
+    - "mysql-{{ gcp_environment }}-master-boot-{{ revision }}"
+    - "mysql-{{ gcp_environment }}-slave-boot-{{ revision }}"
+    - "mysql-{{ gcp_environment }}-master-data-{{ revision }}"
+    - "mysql-{{ gcp_environment }}-slave-data-{{ revision }}"
+    - "mysql-{{ gcp_environment }}-master-logs-{{ revision }}"
+    - "mysql-{{ gcp_environment }}-slave-logs-{{ revision }}"
+
+- name: remove addresses
+  google.cloud.gcp_compute_address:
+    name: "{{ item }}"
+    region: "{{ gcp_region }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    state: absent
+  ignore_errors: true
+  loop:
+    - "mysql-{{ gcp_environment }}-master-{{ revision }}"
+    - "mysql-{{ gcp_environment }}-slave-{{ revision }}"

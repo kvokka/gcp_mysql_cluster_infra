@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+
+set -e
+set -o pipefail
+
+LOCK=/tmp/mysql_backup.lock
+MIGRATION_PATH=/mnt/disks/db-migration
+DB_PATH=/var/lib/mysql/data
+
+start=`date +%s`
+
+exec > >(tee "{{ mysql_backup_logs }}/xtrabackup_backup_restore_$(date '+%Y-%m-%d--%H-%M-%S').log") 2>&1
+
+format_time(){
+  date -u -d @"$1" +"%-Hh %-Mm %-Ss"
+}
+
+slack_message() {
+  end=`date +%s`
+  runtime=$(($end-$start))
+  local msg="$1"
+  local slack_icon=':backup_and_restore:'
+  local slack_channel='#tech-notifications'
+  local slack_username='MySQL-cluster-backup'
+  local title="MySQL Backup restore"
+  local suffix
+  if [[ "$runtime" -gt 3 ]];then suffix=",\"fields\": [{\"title\":\"Duration\",\"value\":\"$(format_time $runtime)\"}]";fi
+  local payload="payload={\"channel\": \"$slack_channel\", \"username\": \"$slack_username\", \"text\": \"\", \"icon_emoji\": \"$slack_icon\", \"attachments\":[{\"title\":\"$title\",\"text\":\"$msg\",\"color\":\"$2\"$suffix}]}"
+  local url="https://hooks.slack.com/services/my/awesome/key"
+  ans=`curl -X POST --data-urlencode "$payload" $url 2>/dev/null`
+}
+
+msg_prefix="*[{{ gcp_environment }}]* *[{{ hostvars[inventory_hostname]['ansible_hostname'] }}]*"
+
+failed_message() {
+  slack_message "$msg_prefix service Mysql DB backup restore process failed" "danger"
+}
+
+clear_slave_settings() {
+  echo "$(date) Clear slave settings"
+  {% if mysql_version == '5.6' or mysql_version == '5.7' %}
+  mysql --execute="STOP SLAVE;RESET SLAVE ALL;"
+  {% else %}
+  mysql --execute="STOP REPLICA FOR CHANNEL '';RESET REPLICA ALL;"
+  {% endif %}
+  sleep 15
+}
+
+function restart_mysql_exporter_after_sync() {
+{% if mysql_version == '5.6' or mysql_version == '5.7' %}
+while ! mysql --execute="show slave status\G" | grep "Seconds_Behind_Master: 0" &> /dev/null ;do
+{% else %}
+while ! mysql --execute="show replica status\G" | grep "Seconds_Behind_Source: 0" &> /dev/null ;do
+{% endif %}
+echo "$(date) Waiting 5 sec for the slave to catch up with mysql_exporter"
+sleep 5
+done
+
+mysql --database={{ database_name }} --execute="FLUSH PRIVILEGES;"
+systemctl restart mysql-exporter
+echo "$(date) Restarted MySQL exporter"
+}
+
+trap failed_message ERR
+
+if [[ -e $LOCK ]]; then
+  echo "Local lock found. Exiting"
+  slack_message "Local lock found. Exiting." "danger"
+  exit 1
+fi
+
+touch $LOCK
+
+mysql --execute='CREATE DATABASE IF NOT EXISTS {{ database_name }};'
+
+slack_message "$msg_prefix service Mysql {{ mysql_version }} xtrabackup DB local restore" "warning"
+
+echo "$(date) Stop MySQL server"
+systemctl stop mysql
+
+mv $DB_PATH "${DB_PATH}_empty"
+mkdir $DB_PATH
+
+echo "$(date) Run xtrabackup --prepare"
+xtrabackup --prepare --target-dir=$MIGRATION_PATH --server-id={{ server_id }}
+echo "$(date) Run xtrabackup --copy-back"
+xtrabackup --copy-back --target-dir=$MIGRATION_PATH
+
+chown -R mysql:mysql {{ mysql_databases_datadir_path }}
+{% if mysql_version == '5.7' %}
+myisamchk -r $DB_PATH/mysql/user
+{% endif %}
+
+echo "$(date) Start MySQL server"
+systemctl start mysql
+
+# In the old cluster we do not have root password, so we have to set it first
+# And in case we did it already we should not fail
+MYSQL_PWD= mysql --execute="SET PASSWORD FOR 'root'@'localhost' = PASSWORD('{{ mysql_root_password }}');FLUSH PRIVILEGES;" || true
+
+echo "$(date) Clear slave settings"
+clear_slave_settings
+
+echo "$(date) Run MySQL upgrade || mysqlcheck"
+mysql_upgrade --force
+echo "$(date) Restart MySQL server"
+service mysql restart
+
+echo "$(date) Last gtid_purged={{ last_gtid.stdout }}"
+
+echo "$(date) Create mysql exporter user"
+
+if ! echo "SELECT EXISTS(SELECT 1 FROM mysql.user WHERE user = '{{ mysql_exporter_username }}' and host = '{{ mysql_exporter_host }}');" | mysql | grep 0 &> /dev/null; then
+mysql --database={{ database_name }} \
+      --execute="DROP USER '{{ mysql_exporter_username }}'@'{{ mysql_exporter_host }}';"
+fi
+
+mysql --database={{ database_name }} \
+      --execute="RESET MASTER; \
+                 CREATE USER '{{ mysql_exporter_username }}'@'{{ mysql_exporter_host }}' \
+                 IDENTIFIED BY '{{ mysql_exporter_password }}'; \
+                 GRANT {{ mysql_exporter_priv | split(':') | last }} \
+                 on {{ mysql_exporter_priv | split(':') | first }} \
+                 TO '{{ mysql_exporter_username }}'@'{{ mysql_exporter_host }}' \
+                 WITH GRANT OPTION; \
+                 FLUSH PRIVILEGES;"
+
+echo "$(date) Restart mysql exporter"
+systemctl restart mysql-exporter
+
+echo "$(date) Start replication"
+mysql --database={{ database_name }} \
+      --execute="RESET MASTER;
+                SET GLOBAL gtid_purged={{ last_gtid.stdout }}; \
+                CHANGE MASTER TO MASTER_HOST='{{ old_master_private_ip if (ansible_hostname | regex_search('master')) else master_private_ip }}',\
+                MASTER_USER='{{ mysql_replication_username }}',\
+                MASTER_PASSWORD='{{ mysql_replication_password }}',\
+                MASTER_AUTO_POSITION=1;
+                START SLAVE;"
+echo "$(date) Restart & disown mysql exporter"
+restart_mysql_exporter_after_sync & disown
+
+slack_message "$msg_prefix service Mysql DB backup restore process finished successfully" "good"
+
+rm $LOCK

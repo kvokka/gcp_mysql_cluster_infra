@@ -1,0 +1,30 @@
+- name: Add mysql exporter credentials
+  template:
+    src: mysql_exporter.cnf.j2
+    dest: "/etc/.mysqld_exporter.cnf"
+    group: mysqlexporter
+    owner: mysqlexporter
+
+- name: Apply mysql exporter config
+  template:
+    src: mysql-exporter.service.j2
+    dest: "/etc/systemd/system/mysql-exporter.service"
+
+- name: Create mysql_exporter user
+  community.mysql.mysql_user:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    update_password: always
+    name: "{{ mysql_exporter_username }}"
+    password: "{{ mysql_exporter_password }}"
+    host: "{{ mysql_exporter_host }}"
+    priv: "{{ mysql_exporter_priv }}"
+    state: present
+    login_unix_socket: /run/mysqld/mysqld.sock
+  when: data_filesystem.changed
+
+- name: Ensure MySQL was restarted and enabled on boot
+  service:
+    name: mysql-exporter
+    state: restarted
+    enabled: yes

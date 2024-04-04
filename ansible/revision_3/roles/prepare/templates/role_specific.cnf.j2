@@ -1,0 +1,14 @@
+[mysqld]
+{% if ansible_hostname | regex_search('master') %}
+slave-skip-errors=1007,1396
+{% else %}
+slave-skip-errors=1062,1032,1756
+read_only
+
+[xtrabackup]
+compress
+parallel={{ xtrabackup_parallel }}
+compress-threads={{ xtrabackup_compress_threads }}
+slave-info
+user=root
+{% endif %}

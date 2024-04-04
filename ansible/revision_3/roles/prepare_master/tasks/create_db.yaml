@@ -1,0 +1,6 @@
+- name: Create a new database
+  community.mysql.mysql_db:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    name: "{{ database_name }}"
+    state: present

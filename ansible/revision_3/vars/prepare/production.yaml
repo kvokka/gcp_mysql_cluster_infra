@@ -1,0 +1,4 @@
+innodb_buffer_pool_size: "{{ (ansible_memtotal_mb *0.8)|int|abs }}MB"
+
+xtrabackup_parallel: "4"
+xtrabackup_compress_threads: "4"

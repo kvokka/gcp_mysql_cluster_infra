@@ -1,0 +1,16 @@
+# It does not execute for cron .bashrc
+- name: Set backup schedule
+  ansible.builtin.cron:
+    name: "MySQL backup"
+    user: root
+    minute: "15"
+    hour: "2"
+    job: 'MYSQL_PWD={{ mysql_root_password }} /usr/local/bin/xtrabackup_backup_create >/dev/null 2>&1'
+
+- name: Set backup logs clean up cron job
+  ansible.builtin.cron:
+    name: "MySQL xtrabackup_backup logs clean up"
+    user: root
+    minute: "15"
+    hour: "4"
+    job: "find {{ mysql_backup_logs }} -type f -mtime +{{ mysql_backup_logs_retention_days }} -name 'xtrabackup_backup_*.log' -execdir rm -- '{}' \\;"

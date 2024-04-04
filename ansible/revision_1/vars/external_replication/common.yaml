@@ -1,0 +1,5 @@
+external_replication_host_down: "mysql-{{ gcp_environment }}-master-{{ (revision | int) - 1 }}"
+external_replication_host_up: "mysql-{{ gcp_environment }}-master-{{ (revision | int) + 1 }}"
+external_replication_username: "{{ mysql_replication_username }}"
+external_replication_password: "{{ mysql_replication_password }}"
+external_replication_port: 3306

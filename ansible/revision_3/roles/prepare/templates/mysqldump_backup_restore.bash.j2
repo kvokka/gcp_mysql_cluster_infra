@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+set -e
+set -o pipefail
+
+start=`date +%s`
+
+exec > >(tee "{{ mysql_backup_logs }}/mysqldump_backup_restore_$(date '+%Y-%m-%d--%H-%M-%S').log") 2>&1
+
+backup_file="${MYSQL_BACKUP_FILE_PATH:={{ mysqldump_backup_file_path }}}"
+
+if [[ -z "$backup_file" ]]; then
+  echo "Mysql backup file must be set in MYSQL_BACKUP_FILE_PATH env var"
+  exit 1
+fi
+
+slack_message() {
+  end=`date +%s`
+  runtime=$(($end-$start))
+  local msg="$1"
+  local slack_icon=':backup_and_restore:'
+  local slack_channel='#tech-notifications'
+  local slack_username='MySQL-cluster-backup'
+  local title="MySQL Backup restore"
+  local suffix
+  if [[ $runtime != 0 ]];then suffix=",\"fields\": [{\"title\":\"Duration\",\"value\":\"$runtime seconds\"}]";fi
+  local payload="payload={\"channel\": \"$slack_channel\", \"username\": \"$slack_username\", \"text\": \"\", \"icon_emoji\": \"$slack_icon\", \"attachments\":[{\"title\":\"$title\",\"text\":\"$msg\",\"color\":\"$2\"$suffix}]}"
+  local url="https://hooks.slack.com/services/my/awesome/key"
+  ans=`curl -X POST --data-urlencode "$payload" $url 2>/dev/null`
+}
+
+msg_prefix="*[{{ gcp_environment }}]* *[{{ hostvars[inventory_hostname]['ansible_hostname'] }}]*"
+
+failed_message() {
+  slack_message "$msg_prefix service Mysql DB backup failed" "danger"
+}
+
+trap failed_message ERR
+
+slack_message "$msg_prefix \
+  service Mysql {{ mysql_version }} mysqldump DB backup restore process started from file $backup_file. \
+  Please wait for the updates here." "warning"
+
+{% if mysql_version == '5.6' %}
+# To load the dump from newer MySQL verion to the older ones we have to do a clean up
+gsutil cat $backup_file | zcat | sed -u 's/ROW_FORMAT=DYNAMIC//g' | awk '{gsub(/ROW_FORMAT=DYNAMIC|ROW_FORMAT=COMPRESSED|KEY_BLOCK_SIZE=16/, "")};1' | mysql {{ database_name }}
+{% else %}
+gsutil cat $backup_file | zcat | mysql {{ database_name }}
+{% endif %}
+
+slack_message "$msg_prefix service Mysql DB backup restore finished successfully" "good"

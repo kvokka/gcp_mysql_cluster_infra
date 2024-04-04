@@ -1,0 +1,45 @@
+- name: Check replica replication status
+  mysql_replication:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    mode: getreplica
+  ignore_errors: true
+  register: slave
+
+- name: Set master private_ip from the dynamic inventory
+  set_fact:
+    master_private_ip: "{{ hostvars[hostvars[inventory_hostname]['groups']['_role_master'][0]]['private_ip'] }}"
+
+# if xtrabackup_backup_folder is set then the replication will be set up by
+#   xtrabackup_backup_restore script
+- name: Stop replication
+  mysql_replication:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    mode: stopreplica
+  when: >
+    slave.Is_Replica and
+    (xtrabackup_backup_folder|default('')|length == 0) and
+    data_filesystem.changed
+
+- name: Configure replication on the replica
+  mysql_replication:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    mode: changeprimary
+    primary_host: "{{ master_private_ip }}"
+    primary_user: "{{ mysql_replication_username }}"
+    primary_password: "{{ mysql_replication_password }}"
+    primary_auto_position: "true"
+  when: >
+    (xtrabackup_backup_folder|default('')|length == 0) and
+    data_filesystem.changed
+
+- name: Start replication
+  mysql_replication:
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    mode: startreplica
+  when: >
+    (xtrabackup_backup_folder|default('')|length == 0) and
+    data_filesystem.changed

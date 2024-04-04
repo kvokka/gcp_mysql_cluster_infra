@@ -1,0 +1,76 @@
+- name: Create an ext4 filesystem on data disk
+  community.general.filesystem:
+    fstype: ext4
+    state: present
+    dev: /dev/disk/by-id/google-{{ mysql_data_disk_device_name }}
+  register: data_filesystem
+
+- name: Stop MySQL if this is fresh setup
+  service:
+    name: mysql
+    state: stopped
+    enabled: no
+  when: data_filesystem.changed
+
+- name: Fetch the UUID of data disk
+  command: blkid -s UUID -o value /dev/disk/by-id/google-{{ mysql_data_disk_device_name }}
+  changed_when: false
+  register: data_disk_blkid_out
+
+- name: Mount data disk by UUID
+  ansible.posix.mount:
+    path: "{{ mysql_databases_path }}"
+    src: UUID={{ data_disk_blkid_out.stdout }}
+    fstype: ext4
+    opts: defaults
+    state: mounted
+
+- name: Making sure MySQL has proper permissions to access {{ mysql_databases_path }}
+  file:
+    path: "{{ mysql_databases_path }}"
+    state: directory
+    owner: mysql
+    group: mysql
+    mode:  0755
+
+- name: Create mysql data dir
+  file:
+    path: "{{ mysql_databases_datadir_path }}"
+    state: directory
+    owner: mysql
+    group: mysql
+    mode:  0755
+
+- name: Delete lost+found in the directory
+  ansible.builtin.file:
+    state: absent
+    path: "{{ mysql_databases_path }}/lost+found"
+  when: data_filesystem.changed
+
+  # we will set root user pass later, but this trick will allow to simplify the install
+- name: Init MySQL system DB for new installs for MySQL 5.7+
+  command: mysqld --initialize-insecure
+  when: >
+    data_filesystem.changed and
+    mysql_version != '5.6'
+
+- name: Init MySQL system DB for new installs for MySQL 5.6
+  command: mysql_install_db --user=mysql
+  when: >
+    data_filesystem.changed and
+    mysql_version == '5.6'
+
+- name: Making sure MySQL has proper permissions to access {{ mysql_databases_path }}
+  file:
+    path: "{{ mysql_databases_path }}"
+    state: directory
+    recurse: yes
+    owner: mysql
+    group: mysql
+    mode:  0755
+
+- name: restart mysql if config changed
+  service: name=mysql state=restarted
+  when: >
+    host_specific_config.changed or
+    role_specific_config.changed

@@ -1,0 +1,24 @@
+- name: Ser server_id
+  set_fact: server_id={{ inventory_hostname | ansible.utils.ip4_hex | int(base=16) }}
+
+- name: Apply mysql host specific config
+  template:
+    src: host_specific.cnf.j2
+    dest: "/etc/mysql/my.conf.d/200_host_specific.cnf"
+  register: host_specific_config
+
+- name: Apply mysql role specific config
+  template:
+    src: role_specific.cnf.j2
+    dest: "/etc/mysql/my.conf.d/300_role_specific.cnf"
+  register: role_specific_config
+
+- name: Apply debian config
+  template:
+    src: mysql-debian.cnf.j2
+    dest: "/etc/mysql/debian.cnf"
+
+- name: Delete MySQL 5.7 temporary server-id config
+  ansible.builtin.file:
+    state: absent
+    path: "/etc/mysql/my.conf.d/12345_server_id.cnf"

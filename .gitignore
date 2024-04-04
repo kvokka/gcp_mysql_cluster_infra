@@ -1,0 +1,6 @@
+/tmp
+**/tmp
+ansible/**/ansible-sa.json
+ansible/**/inventory/gcp.yaml
+ansible/**/inventory/default.yaml
+ansible/**/.ssh/

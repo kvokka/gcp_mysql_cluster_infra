@@ -1,0 +1,10 @@
+---
+
+- hosts: localhost
+  gather_facts: no
+  vars_files:
+    - "vars/common.yaml"
+    - "vars/bootstrap/common.yaml"
+    - "vars/bootstrap/{{ lookup('env','GCP_ENVIRONMENT') or 'staging' }}.yaml"
+  roles:
+    - bootstrap

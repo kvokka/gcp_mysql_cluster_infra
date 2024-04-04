@@ -1,0 +1,9 @@
+gcp_data_disk_size_in_gb: 100
+gcp_boot_disk_size_in_gb: 20
+gcp_logs_disk_size_in_gb: 10
+
+# gcp_data_disk_source_image: projects/my-awesome-project/global/images/mysql-percona-5-6---2023-11-10--22-54-26
+# gcp_data_disk_source_image: projects/my-awesome-project/global/images/mysql-percona-5-7---2023-11-22--03-33-51
+gcp_data_disk_source_image: projects/my-awesome-project/global/images/mysql-percona-8-0---2024-03-11--17-37-33
+
+gcp_machine_type: n1-standard-1

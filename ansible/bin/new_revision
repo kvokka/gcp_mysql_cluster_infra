@@ -1,0 +1,16 @@
+#!/usr/bin/env ruby
+
+PREFIX='revision_'
+
+require "pathname"
+require "fileutils"
+
+last_revision = Pathname.new('.').children.
+      select { |c| c.directory? && c.to_s.start_with?(PREFIX) }.
+      map { |d| d.to_s.sub(PREFIX,'').to_i }.max
+
+FileUtils.copy_entry("#{PREFIX}#{last_revision}", "#{PREFIX}#{last_revision + 1}")
+
+File.open("#{PREFIX}#{last_revision + 1}/revision", "w") {|file| file.puts last_revision + 1 }
+
+puts "Done! New revision can be found in the './#{PREFIX}#{last_revision + 1}' folder"

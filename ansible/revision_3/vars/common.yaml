@@ -1,0 +1,34 @@
+revision: "{{ lookup('env','MYSQL_CLUSTER_REVISION') }}"
+gcp_environment: "{{ lookup('env','GCP_ENVIRONMENT') }}"
+
+gcs_access_key: "{{ lookup('env','GCS_ACCESS_KEY') }}"
+gcs_secret_key: "{{ lookup('env','GCS_SECRET_KEY') }}"
+
+gcp_vm_sa: "{{ '/root/gcp_sa.json' }}"
+# Used as the VM sa
+gcp_vm_sa_email: mysql-backup-db-service@my-awesome-project.iam.gserviceaccount.com
+
+database_name: db
+
+mysql_data_disk_device_name: data
+mysql_boot_disk_device_name: boot
+mysql_logs_disk_device_name: logs
+
+mysql_password_env_var_name: "{{ ('MYSQL_PASS_' + gcp_environment)|upper }}"
+
+mysql_root_password: "{{ lookup('env', mysql_password_env_var_name) }}"
+
+mysql_replication_username: repl
+mysql_replication_password: "{{ lookup('env', mysql_password_env_var_name) }}"
+mysql_replication_priv: '*.*:REPLICATION SLAVE'
+mysql_replication_host: '%'
+
+mysql_service_username: user
+mysql_service_password: "{{ lookup('env', mysql_password_env_var_name) }}"
+mysql_service_priv: '*.*:ALL'
+mysql_service_host: '%'
+
+mysql_exporter_username: mysqld_exporter
+mysql_exporter_password: "{{ (lookup('env', mysql_password_env_var_name) | md5)[:20] }}"
+mysql_exporter_priv: '*.*:PROCESS,REPLICATION CLIENT,SELECT'
+mysql_exporter_host: '%'

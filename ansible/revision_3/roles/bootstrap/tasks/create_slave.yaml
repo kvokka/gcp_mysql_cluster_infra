@@ -1,0 +1,118 @@
+- name: create slave boot disk
+  google.cloud.gcp_compute_disk:
+    name: "mysql-{{ gcp_environment }}-slave-boot-{{ revision }}"
+    size_gb: "{{ gcp_boot_disk_size_in_gb }}"
+    source_image: "{{ gcp_data_disk_source_image }}"
+    zone: "{{ gcp_zone }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    state: present
+    labels:
+      environment: "{{ gcp_environment }}"
+      component: mysql
+      role: "{{ mysql_boot_disk_device_name }}"
+      revision: "{{ revision }}"
+  register: "mysql_disk_slave_boot"
+
+- name: create slave data disk
+  google.cloud.gcp_compute_disk:
+    name: "mysql-{{ gcp_environment }}-slave-data-{{ revision }}"
+    size_gb: "{{ gcp_data_disk_size_in_gb }}"
+    zone: "{{ gcp_zone }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    state: present
+    type: pd-ssd
+    labels:
+      environment: "{{ gcp_environment }}"
+      component: mysql
+      role: "{{ mysql_data_disk_device_name }}"
+      revision: "{{ revision }}"
+  register: "mysql_disk_slave_data"
+
+- name: create slave logs disk
+  google.cloud.gcp_compute_disk:
+    name: "mysql-{{ gcp_environment }}-slave-logs-{{ revision }}"
+    size_gb: "{{ gcp_logs_disk_size_in_gb }}"
+    zone: "{{ gcp_zone }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    state: present
+    type: pd-standard
+    labels:
+      environment: "{{ gcp_environment }}"
+      component: mysql
+      role: "{{ mysql_logs_disk_device_name }}"
+      revision: "{{ revision }}"
+  register: "mysql_disk_slave_logs"
+
+- name: create slave address
+  google.cloud.gcp_compute_address:
+    name: "mysql-{{ gcp_environment }}-slave-{{ revision }}"
+    region: "{{ gcp_region }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    state: present
+  register: "mysql_address_slave"
+
+- name: create slave instance
+  google.cloud.gcp_compute_instance:
+    name: "mysql-{{ gcp_environment }}-slave-{{ revision }}"
+    machine_type: "{{ gcp_machine_type }}"
+    disks:
+    - auto_delete: 'true'
+      boot: 'true'
+      source: "{{ mysql_disk_slave_boot }}"
+      device_name: "{{ mysql_boot_disk_device_name }}"
+    - auto_delete: 'true'
+      source: "{{ mysql_disk_slave_data }}"
+      device_name: "{{ mysql_data_disk_device_name }}"
+    - auto_delete: 'true'
+      source: "{{ mysql_disk_slave_logs }}"
+      device_name: "{{ mysql_logs_disk_device_name }}"
+    labels:
+      environment: "{{ gcp_environment }}"
+      component: mysql
+      revision: "{{ revision }}"
+      role: slave
+    network_interfaces:
+    - network: "{{ network }}"
+      access_configs:
+      - name: External NAT
+        nat_ip: "{{ mysql_address_slave }}"
+        type: ONE_TO_ONE_NAT
+    service_accounts:
+      - email: "{{ gcp_vm_sa_email }}"
+        # https://cloud.google.com/sdk/gcloud/reference/alpha/compute/instances/set-scopes
+        # for some reason it does not accept aliases
+        scopes:
+        # default
+        - https://www.googleapis.com/auth/devstorage.read_only
+        - https://www.googleapis.com/auth/logging.write
+        - https://www.googleapis.com/auth/monitoring.write
+        - https://www.googleapis.com/auth/pubsub
+        - https://www.googleapis.com/auth/service.management.readonly
+        - https://www.googleapis.com/auth/servicecontrol
+        - https://www.googleapis.com/auth/trace.append
+        # storage-rw
+        - https://www.googleapis.com/auth/devstorage.read_write
+    metadata:
+      ssh-keys: "ansible:{{ lookup('file',  '~/.ssh/ansible.pub') }}"
+    zone: "{{ gcp_zone }}"
+    project: "{{ gcp_project }}"
+    auth_kind: "{{ gcp_auth_kind }}"
+    service_account_file: "{{ gcp_sa_file }}"
+    state: present
+  register: "mysql_instance_slave"
+
+- name: Wait for server to start
+  wait_for_connection:
+    delay: 100
+
+# On the first dynamic hosts do not catch up, so we use this instead
+- name: Save hosts data
+  add_host: hostname={{ mysql_address_slave.address }} groupname=cluster_hosts,_role_slave ansible_ssh_private_key_file=~/.ssh/ansible

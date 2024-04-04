@@ -1,0 +1,46 @@
+- name: Create mysql logs dir
+  file:
+    path: "{{ mysql_logs_path }}"
+    state: directory
+    owner: mysql
+    group: mysql
+    mode:  0755
+
+- name: Create an ext4 filesystem on logs disk
+  community.general.filesystem:
+    fstype: ext4
+    state: present
+    dev: /dev/disk/by-id/google-{{ mysql_logs_disk_device_name }}
+
+- name: Fetch the UUID of data disk
+  command: blkid -s UUID -o value /dev/disk/by-id/google-{{ mysql_logs_disk_device_name }}
+  changed_when: false
+  register: data_disk_blkid_out
+
+- name: Mount data disk by UUID
+  ansible.posix.mount:
+    path: "{{ mysql_logs_path }}"
+    src: UUID={{ data_disk_blkid_out.stdout }}
+    fstype: ext4
+    opts: defaults
+    state: mounted
+
+- name: Making sure MySQL has proper permissions to access {{ mysql_logs_path }}
+  file:
+    path: "{{ mysql_logs_path }}"
+    state: directory
+    recurse: yes
+    owner: mysql
+    group: mysql
+    mode:  0755
+
+- name: Create error log file
+  file:
+    path: "{{ item }}"
+    state: touch
+    owner: mysql
+    group: mysql
+    mode: 0640
+  loop:
+  - "{{ mysql_error_logs_path }}"
+  - "{{ mysql_slow_logs_path }}"

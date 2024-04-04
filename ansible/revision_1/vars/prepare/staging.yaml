@@ -1,0 +1,7 @@
+innodb_buffer_pool_size: "{{ (ansible_memtotal_mb *0.4)|int|abs }}MB"
+
+# Backup restore
+
+mysqldump_backup_file_path: gs://mysql-backup/staging/031324_203827-full_backup.gz
+
+# xtrabackup_backup_folder: staging-db-2023-12-04--15-15-14

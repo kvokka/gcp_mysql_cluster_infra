@@ -1,0 +1,25 @@
+- name: Set master private_ip from the dynamic inventory
+  set_fact:
+    master_private_ip: "{{ hostvars[hostvars[inventory_hostname]['groups']['_role_master'][0]]['private_ip'] }}"
+
+- name: Add mysqldump backup restore script
+  template:
+    src: mysqldump_backup_restore.bash.j2
+    dest: /usr/local/bin/mysqldump_backup_restore
+    mode: 0700
+  when: >
+    mysqldump_backup_file_path|default('')|length > 0
+
+- name: Add xtrabackup backup restore script
+  template:
+    src: xtrabackup_backup_restore.bash.j2
+    dest: /usr/local/bin/xtrabackup_backup_restore
+    mode: 0700
+  when: >
+    xtrabackup_backup_folder|default('')|length > 0
+
+- name: Add xtrabackup create script
+  template:
+    src: xtrabackup_backup_create.bash.j2
+    dest: /usr/local/bin/xtrabackup_backup_create
+    mode: 0700

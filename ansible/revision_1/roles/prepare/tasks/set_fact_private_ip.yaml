@@ -1,0 +1,21 @@
+# We have to calculate this differently depending on the information source.
+# Didn't manage to find prettier solution
+
+- name: Set private_ip from the dynamic inventory (second+ runs)
+  set_fact:
+    private_ip: "{{ hostvars[inventory_hostname]['networkInterfaces'][0]['networkIP'] }}"
+  when:
+    (hostvars[inventory_hostname]['networkInterfaces'] is defined) and
+    (hostvars[inventory_hostname]['networkInterfaces'][0] is defined)
+
+- name: Set private_ip from hostsfile (first run)
+  set_fact:
+    private_ip: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
+  when:
+    (hostvars[inventory_hostname]['ansible_default_ipv4'] is defined) and
+    (hostvars[inventory_hostname]['ansible_default_ipv4']['address'] is defined)
+
+- name: Fail if private_ip was not set
+  fail:
+    msg: "Variable 'private_ip' was not defined or empty"
+  when: (private_ip|default('')|length == 0)

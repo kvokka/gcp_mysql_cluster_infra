@@ -1,0 +1,4 @@
+---
+
+- import_playbook: bootstrap.yaml
+- import_playbook: prepare.yaml

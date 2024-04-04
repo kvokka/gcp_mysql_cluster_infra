@@ -1,0 +1,10 @@
+---
+- import_tasks: create_master.yaml
+  tags:
+    - create
+    - master
+
+- import_tasks: create_slave.yaml
+  tags:
+    - create
+    - slave

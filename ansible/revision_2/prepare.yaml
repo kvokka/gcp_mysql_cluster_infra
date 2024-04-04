@@ -1,0 +1,40 @@
+---
+
+- hosts: cluster:cluster_hosts
+  gather_facts: yes
+  remote_user: ansible
+  become: true
+  vars_files:
+    - "vars/common.yaml"
+    - "vars/prepare/common.yaml"
+    - "vars/prepare/{{ lookup('env','GCP_ENVIRONMENT') or 'staging' }}.yaml"
+  roles:
+    - role: prepare
+
+  post_tasks:
+  - name: Ensure MySQL is started and enabled on boot
+    service:
+      name: mysql
+      state: started
+      enabled: yes
+
+- hosts: _role_master
+  gather_facts: yes
+  remote_user: ansible
+  become: true
+  vars_files:
+    - "vars/common.yaml"
+    - "vars/prepare/common.yaml"
+    - "vars/prepare/{{ lookup('env','GCP_ENVIRONMENT') or 'staging' }}.yaml"
+  roles:
+    - role: prepare_master
+
+- hosts: _role_slave
+  gather_facts: yes
+  remote_user: ansible
+  become: true
+  vars_files:
+    - "vars/prepare/common.yaml"
+    - "vars/common.yaml"
+  roles:
+    - role: prepare_slave
